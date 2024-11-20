@@ -1,101 +1,170 @@
-import Image from "next/image";
+"use client";
+import { Button } from "@/components/ui/button";
+import { Upload, FileText, FileSpreadsheet, File } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { useState, useCallback } from 'react';
+import { FileViewer } from '@/components/FileViewer';
+import { DocumentList } from '@/components/DocumentList';
+import { useDocumentStore } from '@/store/documentStore';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const { addDocument, currentDocument, setCurrentDocument } = useDocumentStore();
+  const [isDragging, setIsDragging] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const getFileType = (fileName: string): 'pdf' | 'excel' | 'word' | null => {
+    if (fileName.endsWith('.pdf')) return 'pdf';
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) return 'excel';
+    if (['.docx', '.doc', '.dotx', '.dot', '.docm', '.dotm', '.odt']
+        .some(ext => fileName.toLowerCase().endsWith(ext))) return 'word';
+    return null;
+  };
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleFileInput = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const content = await file.arrayBuffer();
+      const type = getFileType(file.name);
+      
+      if (!type) {
+        alert('Unsupported file type');
+        return;
+      }
+  
+      addDocument({
+        name: file.name,
+        type,
+        content,
+        lastModified: new Date()
+      });
+    }
+  }, [addDocument]);
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      const content = await file.arrayBuffer();
+      const type = getFileType(file.name);
+      
+      if (!type) {
+        alert('Unsupported file type');
+        return;
+      }
+  
+      addDocument({
+        name: file.name,
+        type,
+        content,
+        lastModified: new Date()
+      });
+    }
+  }, [addDocument]);
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      {/* Hero Section */}
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">Universal Document Editor</h1>
+        <p className="text-gray-600 dark:text-gray-300">
+          Edit PDFs, Excel, Word documents and more - all in one place
+        </p>
+      </div>
+
+      {/* Document List */}
+      <div className="mb-8">
+        <DocumentList />
+      </div>
+
+      {/* Upload Section */}
+      {!currentDocument ? (
+        <div className="mb-12">
+          <Card
+            className={`p-8 border-dashed border-2 ${
+              isDragging ? 'border-primary bg-primary/10' : 'border-gray-300'
+            } rounded-lg cursor-pointer hover:border-primary transition-colors`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => onDrop([e.dataTransfer.files[0]])}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <Upload className="h-12 w-12 text-gray-400" />
+              <div className="text-center">
+                <p className="text-lg font-medium">Drop your files here</p>
+                <p className="text-sm text-gray-500">or</p>
+                <label htmlFor="file-upload">
+                  <Button className="mt-2" onClick={() => document.getElementById('file-upload')?.click()}>
+                    Browse Files
+                  </Button>
+                </label>
+                <input
+                  id="file-upload"
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileInput}
+                  accept=".xlsx,.xls,.pdf,.docx,.doc,.dotx,.dot,.docm,.dotm,.odt"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      ) : (
+        <div className="mb-12">
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentDocument(null)}
+            className="mb-4"
+          >
+            ← Back to Documents
+          </Button>
+          <FileViewer
+            file={currentDocument}
+            onClose={() => setCurrentDocument(null)}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        </div>
+      )}
+
+      {/* Supported Formats */}
+      <div className="mb-12">
+        <h2 className="text-2xl font-semibold mb-6">Supported Formats</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="p-6">
+            <div className="flex items-center space-x-4">
+              <File className="h-8 w-8 text-red-500" />
+              <div>
+                <h3 className="font-medium">PDF Documents</h3>
+                <p className="text-sm text-gray-500">Edit and annotate PDFs</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-6">
+            <div className="flex items-center space-x-4">
+              <FileSpreadsheet className="h-8 w-8 text-green-500" />
+              <div>
+                <h3 className="font-medium">Excel Spreadsheets</h3>
+                <p className="text-sm text-gray-500">Modify Excel files online</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-6">
+            <div className="flex items-center space-x-4">
+              <FileText className="h-8 w-8 text-blue-500" />
+              <div>
+                <h3 className="font-medium">Word Documents</h3>
+                <p className="text-sm text-gray-500">Edit Word files seamlessly</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
