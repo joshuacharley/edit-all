@@ -13,9 +13,12 @@ import {
 } from '@/components/ui/table';
 import { Trash2, FileText, FileSpreadsheet, FileType } from 'lucide-react';
 import { format } from 'date-fns';
+import { useState } from 'react';
 
 export function DocumentList() {
   const { documents, removeDocument, setCurrentDocument } = useDocumentStore();
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const getFileIcon = (type: 'pdf' | 'excel' | 'word') => {
     switch (type) {
@@ -35,20 +38,27 @@ export function DocumentList() {
 
   const handleDelete = async (documentId: string) => {
     try {
+      setIsDeleting(documentId);
+      setError(null);
+
       // Call API to delete document
       const response = await fetch(`/api/documents?documentId=${documentId}`, {
         method: 'DELETE',
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to delete document');
+        throw new Error(data.error || 'Failed to delete document');
       }
 
       // Remove from local state
       removeDocument(documentId);
     } catch (error) {
       console.error('Error deleting document:', error);
-      alert('Failed to delete document');
+      setError(error instanceof Error ? error.message : 'Failed to delete document');
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -62,6 +72,11 @@ export function DocumentList() {
 
   return (
     <Card className="p-4">
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 text-red-500 rounded-lg">
+          {error}
+        </div>
+      )}
       <Table>
         <TableHeader>
           <TableRow>
@@ -73,8 +88,8 @@ export function DocumentList() {
         </TableHeader>
         <TableBody>
           {documents.map((doc) => {
-            // Create a unique key using document properties
-            const docId = doc._id || `temp-${doc.name}-${Date.now()}`;
+            const docId = doc._id;
+            if (!docId) return null;
             
             return (
               <TableRow key={docId}>
@@ -95,9 +110,10 @@ export function DocumentList() {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDelete(docId)}
+                    disabled={isDeleting === docId}
                     className="h-8 w-8 p-0"
                   >
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <Trash2 className={`h-4 w-4 ${isDeleting === docId ? 'text-gray-400' : 'text-red-500'}`} />
                   </Button>
                 </TableCell>
               </TableRow>

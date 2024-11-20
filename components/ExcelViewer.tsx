@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
@@ -25,13 +27,33 @@ export function ExcelViewer({ data, documentId }: ExcelViewerProps) {
   const [editingCell, setEditingCell] = useState<{row: number; col: string} | null>(null);
 
   useEffect(() => {
-    const workbook = XLSX.read(data);
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(firstSheet);
-    
-    if (jsonData.length > 0) {
-      setHeaders(Object.keys(jsonData[0]));
-      setRows(jsonData);
+    if (!data) return;
+
+    try {
+      // Convert ArrayBuffer to Uint8Array for XLSX
+      const uint8Array = new Uint8Array(data);
+      const workbook = XLSX.read(uint8Array, { type: 'array' });
+      
+      if (workbook.SheetNames.length === 0) {
+        console.error('No sheets found in the workbook');
+        return;
+      }
+
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(firstSheet);
+      
+      if (jsonData.length > 0) {
+        setHeaders(Object.keys(jsonData[0]));
+        setRows(jsonData);
+      } else {
+        console.warn('No data found in the Excel sheet');
+        setHeaders([]);
+        setRows([]);
+      }
+    } catch (error) {
+      console.error('Error reading Excel file:', error);
+      setHeaders([]);
+      setRows([]);
     }
   }, [data]);
 
@@ -41,21 +63,17 @@ export function ExcelViewer({ data, documentId }: ExcelViewerProps) {
     setRows(newRows);
     setEditingCell(null);
 
-    // Convert back to Excel format and update document
-    const ws = XLSX.utils.json_to_sheet(newRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    const newBuffer = XLSX.write(wb, { type: 'array' }) as ArrayBuffer;
-    updateDocument(documentId, newBuffer);
+    try {
+      // Convert back to Excel format and update document
+      const ws = XLSX.utils.json_to_sheet(newRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      const newBuffer = XLSX.write(wb, { type: 'array' }) as ArrayBuffer;
+      updateDocument(documentId, newBuffer);
+    } catch (error) {
+      console.error('Error updating Excel file:', error);
+    }
   };
-
-  const handleCellClick = (rowIndex: number, column: string) => {
-    setEditingCell({ row: rowIndex, col: column });
-  };
-
-  if (rows.length === 0) {
-    return <div>No data</div>;
-  }
 
   return (
     <div className="overflow-x-auto">
@@ -72,23 +90,19 @@ export function ExcelViewer({ data, documentId }: ExcelViewerProps) {
             <TableRow key={rowIndex}>
               {headers.map((header) => (
                 <TableCell key={`${rowIndex}-${header}`}>
-                  {editingCell?.row === rowIndex && editingCell?.col === header ? (
+                  {editingCell?.row === rowIndex && editingCell.col === header ? (
                     <Input
+                      value={row[header]?.toString() || ''}
+                      onChange={(e) => handleCellEdit(e.target.value, rowIndex, header)}
+                      onBlur={() => setEditingCell(null)}
                       autoFocus
-                      defaultValue={String(row[header] || '')}
-                      onBlur={(e) => handleCellEdit(e.target.value, rowIndex, header)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCellEdit(e.currentTarget.value, rowIndex, header);
-                        }
-                      }}
                     />
                   ) : (
                     <div
-                      className="cursor-pointer hover:bg-gray-100 p-1 rounded"
-                      onClick={() => handleCellClick(rowIndex, header)}
+                      className="min-h-[2rem] cursor-pointer hover:bg-gray-100 p-2 rounded"
+                      onClick={() => setEditingCell({ row: rowIndex, col: header })}
                     >
-                      {String(row[header] || '')}
+                      {row[header]?.toString() || ''}
                     </div>
                   )}
                 </TableCell>
